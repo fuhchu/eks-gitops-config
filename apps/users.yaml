@@ -1,0 +1,37 @@
+# Argo CD Application for the users service.
+# An Application is Argo CD's core object: "keep <destination> matching the
+# manifests rendered from <source>." Argo CD compares the two continuously and
+# reports/repairs any difference.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: users
+  # Applications themselves live in the argocd namespace (where Argo CD runs),
+  # NOT in the namespace their workloads land in.
+  namespace: argocd
+  annotations:
+    # app-of-apps ordering: postgres (wave 0) is created before the services
+    # that connect to it (wave 1). The gateway (wave 2) comes last.
+    argocd.argoproj.io/sync-wave: "1"
+  # Without this finalizer, deleting the Application orphans its workloads.
+  # With it, Argo CD cascade-deletes everything this app created.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Argo CD pulls from the PUBLIC config repo — no repo credentials needed.
+    repoURL: https://github.com/fuhchu/eks-gitops-config.git
+    targetRevision: main
+    path: charts/users        # a Helm chart -> Argo CD runs `helm template`
+    # No helm.values override: the chart's own values.yaml (which CI edits to
+    # bump image.tag) is the source of truth.
+  destination:
+    server: https://kubernetes.default.svc   # this same (in-cluster) API server
+    namespace: eks-gitops
+  syncPolicy:
+    automated:
+      prune: true      # delete resources that no longer exist in git
+      selfHeal: true   # revert manual `kubectl edit` drift back to git
+    syncOptions:
+      - CreateNamespace=true   # create the eks-gitops namespace if absent

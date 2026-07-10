@@ -1,0 +1,31 @@
+# The "app-of-apps" root.
+#
+# This is the ONLY thing you apply by hand (once):
+#     kubectl apply -f bootstrap/root-app.yaml
+#
+# Its source is the apps/ DIRECTORY (not a Helm chart). Argo CD reads every
+# manifest in there — which happen to be Application objects — and creates them.
+# So one `kubectl apply` bootstraps postgres + all three services, and from then
+# on adding a workload is just committing a new file to apps/ (no kubectl).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fuhchu/eks-gitops-config.git
+    targetRevision: main
+    path: apps
+    directory:
+      recurse: false   # apps/ is flat; don't descend into subfolders
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd   # the child Application objects live here
+  syncPolicy:
+    automated:
+      prune: true      # delete a child Application if its file leaves apps/
+      selfHeal: true
