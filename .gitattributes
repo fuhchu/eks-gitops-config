@@ -1,0 +1,4 @@
+# Normalize line endings to LF. Critical for the shell scripts embedded as
+# YAML block scalars in the charts (initContainers): a CRLF would put a stray
+# \r inside the sh -c string and break the script inside the Linux container.
+* text=auto eol=lf

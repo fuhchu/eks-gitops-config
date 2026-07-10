@@ -1,0 +1,25 @@
+replicaCount: 2
+
+image:
+  # This repo is the source of truth. CI in eks-gitops-app bumps `tag` by
+  # committing here; Argo CD renders {{ image.repository }}:{{ image.tag }}.
+  repository: "445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-users"
+  tag: "bootstrap"   # seeded once in M1; every push after that sets a git SHA
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8001
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+env: {}
+  # DATABASE_URL comes from the users-db-credentials Secret, which External
+  # Secrets Operator materializes from AWS Secrets Manager. See
+  # templates/externalsecret.yaml.

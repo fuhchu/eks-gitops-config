@@ -1,0 +1,30 @@
+replicaCount: 2
+
+image:
+  # This repo is the source of truth. CI in eks-gitops-app bumps `tag` by
+  # committing here; Argo CD renders {{ image.repository }}:{{ image.tag }}.
+  repository: "445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-api-gateway"
+  tag: "bootstrap"   # seeded once in M1; every push after that sets a git SHA
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+env:
+  USERS_SERVICE_URL: "http://users:8001"
+  ITEMS_SERVICE_URL: "http://items:8002"
+
+ingress:
+  host: "eks-gitops.fuhchu.org"
+  # PLACEHOLDER — replace with the new ACM cert ARN that Terraform outputs in
+  # M1 (the value below is P3's cert for eks-helm.fuhchu.org and won't match).
+  certificateArn: "REPLACE_WITH_M1_ACM_ARN"

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api-gateway
+description: Reverse proxy service for eks-gitops
+type: application
+version: 0.1.0
+appVersion: "latest"
