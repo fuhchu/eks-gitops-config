@@ -25,6 +25,4 @@ env:
 
 ingress:
   host: "eks-gitops.fuhchu.org"
-  # PLACEHOLDER — replace with the new ACM cert ARN that Terraform outputs in
-  # M1 (the value below is P3's cert for eks-helm.fuhchu.org and won't match).
-  certificateArn: "REPLACE_WITH_M1_ACM_ARN"
+  certificateArn: "arn:aws:acm:us-west-2:445481011516:certificate/c7d48150-bd32-412f-8380-4335dab43706"

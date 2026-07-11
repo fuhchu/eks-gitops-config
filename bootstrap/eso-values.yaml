@@ -1,0 +1,15 @@
+# Helm values for External Secrets Operator (installed into the external-secrets
+# namespace). One-time bootstrap install:
+#   helm install external-secrets external-secrets/external-secrets \
+#     -n external-secrets --create-namespace -f bootstrap/eso-values.yaml
+#
+# The SA name/namespace MUST match the IRSA role's trust policy in Terraform:
+# system:serviceaccount:external-secrets:external-secrets
+installCRDs: true
+
+serviceAccount:
+  name: external-secrets
+  annotations:
+    # IRSA: ESO's controller pod assumes this role to read the one Secrets
+    # Manager secret (eks-gitops/postgres) the ClusterSecretStore points at.
+    eks.amazonaws.com/role-arn: arn:aws:iam::445481011516:role/eks-gitops-external-secrets
