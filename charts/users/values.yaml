@@ -3,7 +3,7 @@ image:
   # This repo is the source of truth. CI in eks-gitops-app bumps `tag` by
   # committing here; Argo CD renders {{ image.repository }}:{{ image.tag }}.
   repository: "445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-users"
-  tag: "5ff846bd6e7efea7f239faaa32e5bf9cfcf71aab" # seeded once in M1; every push after that sets a git SHA
+  tag: "97d753367a19328087539a3205eb569dd310e3e5" # seeded once in M1; every push after that sets a git SHA
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
