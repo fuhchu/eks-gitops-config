@@ -28,6 +28,9 @@ config:
 # The script is mounted into the pod by the chart. It calls AWS with the pod's
 # IRSA identity (no static keys) and prints "AWS:<token>", which is the
 # username:password form Image Updater expects.
+#
+# `tr -d '\n'` guards the output contract: Image Updater rejects anything that
+# isn't a single line of <username>:<password>.
 authScripts:
   enabled: true
   scripts:
@@ -35,7 +38,17 @@ authScripts:
       #!/bin/sh
       aws ecr --region us-west-2 get-authorization-token \
         --output text --query 'authorizationData[].authorizationToken' \
-        | base64 -d
+        | base64 -d | tr -d '\n'
+
+# The chart runs the container with readOnlyRootFilesystem: true (a good
+# default), so the AWS CLI cannot create its config dir at $HOME/.aws and dies
+# with "[Errno 30] Read-only file system: '/app/.aws'".
+#
+# The chart already mounts a writable emptyDir at /tmp, so simply repointing
+# HOME there fixes it — no extra volume, and readOnlyRootFilesystem stays on.
+extraEnv:
+  - name: HOME
+    value: /tmp
 
 serviceAccount:
   create: true

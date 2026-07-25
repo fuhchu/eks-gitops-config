@@ -51,3 +51,39 @@ spec:
             helm:
               name: image.repository
               tag: image.tag
+
+    # ── items ──────────────────────────────────────────────────────────────
+    - namePattern: items
+      writeBackConfig:
+        method: "git:secret:argocd/git-creds"
+        gitConfig:
+          branch: main
+          writeBackTarget: "helmvalues:/charts/items/values.yaml"
+      images:
+        - alias: items
+          imageName: 445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-items
+          commonUpdateSettings:
+            updateStrategy: "newest-build"
+            allowTags: "regexp:^[0-9a-f]{40}$"
+          manifestTargets:
+            helm:
+              name: image.repository
+              tag: image.tag
+
+    # ── api-gateway ────────────────────────────────────────────────────────
+    - namePattern: api-gateway
+      writeBackConfig:
+        method: "git:secret:argocd/git-creds"
+        gitConfig:
+          branch: main
+          writeBackTarget: "helmvalues:/charts/api-gateway/values.yaml"
+      images:
+        - alias: api-gateway
+          imageName: 445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-api-gateway
+          commonUpdateSettings:
+            updateStrategy: "newest-build"
+            allowTags: "regexp:^[0-9a-f]{40}$"
+          manifestTargets:
+            helm:
+              name: image.repository
+              tag: image.tag
