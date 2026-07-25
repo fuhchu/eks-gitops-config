@@ -13,6 +13,35 @@ metadata:
     # app-of-apps ordering: postgres (wave 0) is created before the services
     # that connect to it (wave 1). The gateway (wave 2) comes last.
     argocd.argoproj.io/sync-wave: "1"
+
+    # ── Argo CD Image Updater ──────────────────────────────────────────────
+    # Declares an image to track under the alias `users`; the alias prefixes
+    # every other annotation below.
+    argocd-image-updater.argoproj.io/image-list: users=445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-users
+
+    # Our tags are git SHAs — not semver and not meaningfully sortable by name —
+    # so pick the most recently BUILT image rather than the highest version.
+    argocd-image-updater.argoproj.io/users.update-strategy: newest-build
+
+    # Only consider 40-char hex tags (git SHAs). This is what stops it from
+    # ever selecting the hand-seeded `bootstrap` tag or any stray tag.
+    argocd-image-updater.argoproj.io/users.allow-tags: regexp:^[0-9a-f]{40}$
+
+    # Which Helm values keys hold the image, so it edits the right lines.
+    argocd-image-updater.argoproj.io/users.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/users.helm.image-tag: image.tag
+
+    # write-back-method `git` is what makes this GitOps rather than a live
+    # patch: the new tag is COMMITTED to this repo, so git stays the source of
+    # truth and the change is auditable/revertable. (The default `argocd`
+    # method mutates the Application via the API and leaves git stale.)
+    argocd-image-updater.argoproj.io/write-back-method: git:secret:argocd/git-creds
+    argocd-image-updater.argoproj.io/git-branch: main
+
+    # Write into the real values.yaml (repo-root-relative path). Without this,
+    # it would write a separate .argocd-source-users.yaml override file, which
+    # works but leaves values.yaml misleadingly stale.
+    argocd-image-updater.argoproj.io/write-back-target: helmvalues:/charts/users/values.yaml
   # Without this finalizer, deleting the Application orphans its workloads.
   # With it, Argo CD cascade-deletes everything this app created.
   finalizers:

@@ -83,7 +83,12 @@ resource "aws_iam_role_policy" "external_secrets" {
         "secretsmanager:GetSecretValue",
         "secretsmanager:DescribeSecret"
       ]
-      Resource = aws_secretsmanager_secret.postgres.arn
+      # Still an explicit allow-list of individual secrets, not a wildcard:
+      # ESO can read exactly these two and nothing else in Secrets Manager.
+      Resource = [
+        aws_secretsmanager_secret.postgres.arn,
+        aws_secretsmanager_secret.git_creds.arn
+      ]
     }]
   })
 }

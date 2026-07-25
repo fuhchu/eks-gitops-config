@@ -1,0 +1,46 @@
+# Helm values for Argo CD Image Updater (installed into the argocd namespace).
+#
+#   helm install argocd-image-updater argo/argocd-image-updater \
+#     -n argocd -f bootstrap/image-updater-values.yaml
+#
+# Image Updater polls ECR for new tags and commits them into this config repo.
+# That is what lets CI stay completely keyless: the build pipeline only pushes
+# an image, and the promotion to git happens in-cluster.
+
+config:
+  logLevel: info
+
+  # How often to poll the registry for new tags.
+  interval: 2m
+
+  registries:
+    - name: ECR
+      api_url: https://445481011516.dkr.ecr.us-west-2.amazonaws.com
+      prefix: 445481011516.dkr.ecr.us-west-2.amazonaws.com
+      # ECR has no docker-style /v2/ ping endpoint.
+      ping: false
+      # ECR auth tokens are short-lived, so credentials come from a script that
+      # mints a fresh one rather than a static secret. credsexpire tells Image
+      # Updater to re-run the script before the 12h token actually expires.
+      credentials: ext:/scripts/ecr-login.sh
+      credsexpire: 10h
+
+# The script is mounted into the pod by the chart. It calls AWS with the pod's
+# IRSA identity (no static keys) and prints "AWS:<token>", which is the
+# username:password form Image Updater expects.
+authScripts:
+  enabled: true
+  scripts:
+    ecr-login.sh: |
+      #!/bin/sh
+      aws ecr --region us-west-2 get-authorization-token \
+        --output text --query 'authorizationData[].authorizationToken' \
+        | base64 -d
+
+serviceAccount:
+  create: true
+  name: argocd-image-updater
+  annotations:
+    # IRSA: read-only ECR access. Trust policy is locked to this exact
+    # namespace/ServiceAccount pair.
+    eks.amazonaws.com/role-arn: arn:aws:iam::445481011516:role/eks-gitops-image-updater
