@@ -1,16 +1,13 @@
 replicaCount: 2
-
 image:
   # This repo is the source of truth. CI in eks-gitops-app bumps `tag` by
   # committing here; Argo CD renders {{ image.repository }}:{{ image.tag }}.
   repository: "445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-api-gateway"
-  tag: "bootstrap"   # seeded once in M1; every push after that sets a git SHA
+  tag: "97d753367a19328087539a3205eb569dd310e3e5" # seeded once in M1; every push after that sets a git SHA
   pullPolicy: IfNotPresent
-
 service:
   type: ClusterIP
   port: 8000
-
 resources:
   requests:
     cpu: "100m"
@@ -18,11 +15,9 @@ resources:
   limits:
     cpu: "250m"
     memory: "256Mi"
-
 env:
   USERS_SERVICE_URL: "http://users:8001"
   ITEMS_SERVICE_URL: "http://items:8002"
-
 ingress:
   host: "eks-gitops.fuhchu.org"
   certificateArn: "arn:aws:acm:us-west-2:445481011516:certificate/c7d48150-bd32-412f-8380-4335dab43706"
