@@ -1,0 +1,53 @@
+# Argo CD Image Updater configuration (v1.x CRD form).
+#
+# NOTE ON VERSIONS: v0.x configured this with argocd-image-updater.argoproj.io/*
+# annotations on each Argo CD Application. v1.0 replaced that with this
+# ImageUpdater custom resource; the old annotations are no longer honoured.
+# Most blog posts and tutorials still show the annotation style — this is the
+# current one.
+#
+# Applied once (or, better, put under Argo CD's own management later):
+#     kubectl apply -f bootstrap/imageupdater-cr.yaml
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: eks-gitops
+  namespace: argocd
+spec:
+  applicationRefs:
+    # Matches the Argo CD Application named `users`.
+    - namePattern: users
+
+      writeBackConfig:
+        # `git` (not the default `argocd`) is what makes this GitOps: the new
+        # tag is COMMITTED to the config repo, so git stays the source of truth
+        # and every deploy is auditable and revertable. The `argocd` method
+        # would patch the live Application and leave git stale.
+        #
+        # Credentials come from the git-creds Secret that ESO materializes from
+        # AWS Secrets Manager.
+        method: "git:secret:argocd/git-creds"
+        gitConfig:
+          branch: main
+          # Write into the real values.yaml rather than the default
+          # .argocd-source-users.yaml override file, so the chart values stay
+          # the honest source of truth. Path is repo-root-relative.
+          writeBackTarget: "helmvalues:/charts/users/values.yaml"
+
+      images:
+        - alias: users
+          imageName: 445481011516.dkr.ecr.us-west-2.amazonaws.com/eks-gitops-users
+
+          commonUpdateSettings:
+            # Our tags are git SHAs — not semver, and not meaningfully sortable
+            # by name — so select the most recently BUILT image.
+            updateStrategy: "newest-build"
+            # Only consider 40-char hex tags (git SHAs). This is what stops it
+            # from ever selecting the hand-seeded `bootstrap` tag.
+            allowTags: "regexp:^[0-9a-f]{40}$"
+
+          # Which keys in charts/users/values.yaml hold the image.
+          manifestTargets:
+            helm:
+              name: image.repository
+              tag: image.tag
