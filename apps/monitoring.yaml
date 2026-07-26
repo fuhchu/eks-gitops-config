@@ -1,0 +1,146 @@
+# kube-prometheus-stack — Prometheus, Grafana, kube-state-metrics, node-exporter.
+#
+# Deployed THROUGH Argo CD rather than `helm install`. The platform addons in
+# bootstrap/ had to be installed imperatively because Argo CD depends on them
+# (you cannot GitOps the prerequisites of GitOps). Monitoring has no such
+# constraint, so it arrives the GitOps way: committing this one file to apps/
+# is the entire deployment.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    # After the app workloads (waves 0-2) — nothing depends on it.
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # NOTE: a different source type than our other apps. Those point at a git
+    # path; this points at a Helm REPOSITORY + chart name, so Argo CD pulls the
+    # upstream chart directly. targetRevision is the chart version, pinned so a
+    # new upstream release can never silently change the cluster.
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 87.19.1
+
+    helm:
+      values: |
+        # ── Sizing ──────────────────────────────────────────────────────────
+        # This cluster is 2x t3.medium (~3.9 vCPU / ~6.6Gi allocatable total)
+        # already running ~30 pods, so the stack is deliberately trimmed.
+        # Defaults would schedule fine but leave little headroom for the load
+        # test in M5.
+
+        # Alertmanager routes alerts to Slack/PagerDuty/etc. There is nowhere
+        # to route them here, and it costs a pod plus a PVC — so it is off.
+        # In production this would be enabled and wired to a real receiver.
+        alertmanager:
+          enabled: false
+
+        # ── EKS-specific: the control plane is AWS-managed ──────────────────
+        # etcd, the scheduler and the controller-manager run on AWS's side of
+        # the line and expose no scrapeable endpoint to us. Left enabled, each
+        # becomes a permanently-red target in Prometheus. Disabling them is the
+        # correct answer on EKS (on self-managed Kubernetes you WOULD scrape
+        # them). kube-proxy is disabled too: its metrics bind to 127.0.0.1 on
+        # EKS nodes, so the scrape fails unless the bind address is patched.
+        kubeEtcd:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeControllerManager:
+          enabled: false
+        kubeProxy:
+          enabled: false
+
+        prometheus:
+          prometheusSpec:
+            # Short retention: this is a demo cluster that gets destroyed
+            # between sessions. Production sizing is driven by how far back you
+            # need to query during an incident.
+            retention: 2d
+
+            # By default the chart makes Prometheus discover ONLY ServiceMonitors
+            # carrying its own release label. These four lines widen that to all
+            # namespaces, which is what lets the ServiceMonitors we write for
+            # our own services (in the eks-gitops namespace) be picked up.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                memory: 1Gi
+
+            # EBS-backed persistence via the gp2 StorageClass and the EBS CSI
+            # driver Terraform installed. Without a volumeClaimTemplate,
+            # Prometheus stores to emptyDir and loses all history on restart.
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp2
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+
+        prometheusOperator:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+
+        grafana:
+          enabled: true
+          # No PVC: every dashboard is provisioned from the chart, so the pod
+          # is disposable. Persistence would only matter for hand-made
+          # dashboards, which should be committed to git anyway.
+          persistence:
+            enabled: false
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          # SECURITY NOTE: this uses the chart's default admin password
+          # ("prom-operator"). Acceptable ONLY because Grafana is a ClusterIP
+          # service with no Ingress — it is reachable exclusively via
+          # `kubectl port-forward`, which already requires cluster credentials.
+          # Production answer: `grafana.admin.existingSecret` fed by External
+          # Secrets from AWS Secrets Manager (the pattern already used for the
+          # Postgres password), or SSO via OIDC.
+
+        kube-state-metrics:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+
+        nodeExporter:
+          enabled: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # REQUIRED for this chart. The Prometheus Operator CRDs are enormous, and
+      # client-side apply stores the whole manifest in the
+      # kubectl.kubernetes.io/last-applied-configuration annotation, which
+      # blows past etcd's 262144-byte annotation limit:
+      #   "metadata.annotations: Too long: must have at most 262144 bytes"
+      # Server-side apply keeps field ownership on the server instead, so no
+      # such annotation is written.
+      - ServerSideApply=true
